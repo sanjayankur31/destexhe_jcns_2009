@@ -23,9 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import nest
 import nest.voltage_trace
-import pylab
-import matplotlib
-import matplotlib.pyplot as plt
+import subprocess
 
 
 class Destexhe2009:
@@ -35,6 +33,11 @@ class Destexhe2009:
     def __init__(self):
         """Init params."""
         nest.ResetKernel()
+        nest.SetKernelStatus(
+            {
+                'resolution': 0.1,
+                'overwrite_files': True,
+            })
         # not setting a, b here - they differ for different neuron sets so
         # we'll set them there. These are the common properties.
         self.S = 20000e-12  # m^2
@@ -120,55 +123,100 @@ class Destexhe2009:
 
     def figure1(self):
         """Figure 1."""
-        dc_stim = nest.Create('dc_generator')
-        dc_properties = [
+        # set up depolarizing step current
+        dc_stim_depol = nest.Create('dc_generator')
+        dc_depol_properties = [
             {'amplitude': 0.25e3,  # pA
              'start': 200.,
-             'stop': 400.
+             'stop': 600.
              }]
+        nest.SetStatus(dc_stim_depol, dc_depol_properties)
+
+        # set up hyperpolarizing step current
+        dc_stim_hyperpol = nest.Create('dc_generator')
+        dc_hyperpol_properties = [
+            {'amplitude': -0.25e3,  # pA
+             'start': 200.,
+             'stop': 600.
+             }]
+        nest.SetStatus(dc_stim_hyperpol, dc_hyperpol_properties)
+
+        # Set up voltmeters - one each for each cell
         voltmeter_properties = {'withgid': True,
                                 'withtime': True,
-                                'interval': 0.1}
+                                'interval': 0.1,
+                                'to_file': True,
+                                }
+        voltmeter1 = nest.Create('voltmeter')
+        voltmeter2 = nest.Create('voltmeter')
+        voltmeter3 = nest.Create('voltmeter')
+        voltmeter4 = nest.Create('voltmeter')
+        voltmeter5 = nest.Create('voltmeter')
+        voltmeter6 = nest.Create('voltmeter')
+        voltmeter7 = nest.Create('voltmeter')
+        voltmeter8 = nest.Create('voltmeter')
+        voltmeter9 = nest.Create('voltmeter')
+        nest.SetStatus(voltmeter1, voltmeter_properties)
+        nest.SetStatus(voltmeter2, voltmeter_properties)
+        nest.SetStatus(voltmeter3, voltmeter_properties)
+        nest.SetStatus(voltmeter4, voltmeter_properties)
+        nest.SetStatus(voltmeter5, voltmeter_properties)
+        nest.SetStatus(voltmeter6, voltmeter_properties)
+        nest.SetStatus(voltmeter7, voltmeter_properties)
+        nest.SetStatus(voltmeter8, voltmeter_properties)
+        nest.SetStatus(voltmeter9, voltmeter_properties)
 
-        nest.SetStatus(dc_stim, dc_properties)
-
+        # individual neurons
         RS_strong_cell = nest.Create('RS_strong_cell', 1)
-        nest.Connect(dc_stim, RS_strong_cell, 'all_to_all')
-        RS_strong_voltmeter = nest.Create('voltmeter')
-        nest.SetStatus(RS_strong_voltmeter, voltmeter_properties)
-        nest.Connect(RS_strong_voltmeter, RS_strong_cell)
+        print("GID of RS_strong_cell is: {}".format(RS_strong_cell))
+        nest.Connect(dc_stim_depol, RS_strong_cell, 'all_to_all')
+        nest.Connect(voltmeter1, RS_strong_cell)
 
         RS_weak_cell = nest.Create('RS_weak_cell', 1)
-        nest.Connect(dc_stim, RS_weak_cell, 'all_to_all')
-        RS_weak_voltmeter = nest.Create('voltmeter')
-        nest.SetStatus(RS_weak_voltmeter, {'withgid': True,
-                                           'withtime': True,
-                                           'interval': 0.1})
-        nest.Connect(RS_weak_voltmeter, RS_weak_cell)
+        print("GID of RS_weak_cell is: {}".format(RS_weak_cell))
+        nest.Connect(dc_stim_depol, RS_weak_cell, 'all_to_all')
+        nest.Connect(voltmeter2, RS_weak_cell)
 
         FS_cell = nest.Create('FS_cell', 1)
-        nest.Connect(dc_stim, FS_cell, 'all_to_all')
-        FS_voltmeter = nest.Create('voltmeter')
-        nest.SetStatus(FS_voltmeter, {'withgid': True,
-                                      'withtime': True,
-                                      'interval': 0.1})
-        nest.Connect(FS_voltmeter, FS_cell)
+        print("GID of FS_cell is: {}".format(FS_cell))
+        nest.Connect(dc_stim_depol, FS_cell, 'all_to_all')
+        nest.Connect(voltmeter3, FS_cell)
 
         LTS_cell = nest.Create('LTS_cell', 1)
-        nest.Connect(dc_stim, LTS_cell, 'all_to_all')
-        LTS_voltmeter = nest.Create('voltmeter')
-        nest.SetStatus(LTS_voltmeter, {'withgid': True,
-                                       'withtime': True,
-                                       'interval': 0.1})
-        nest.Connect(LTS_voltmeter, LTS_cell)
+        print("GID of LTS_cell is: {}".format(LTS_cell))
+        nest.Connect(dc_stim_depol, LTS_cell, 'all_to_all')
+        nest.Connect(voltmeter4, LTS_cell)
 
-        nest.Simulate(600)
+        TC_cell = nest.Create('TC_cell', 1)
+        print("GID of TC_cell is: {}".format(TC_cell))
+        nest.Connect(dc_stim_depol, TC_cell, 'all_to_all')
+        nest.Connect(voltmeter5, TC_cell)
 
-        events = nest.GetStatus(voltmeter, 'events')[0]
-        times = events['times']
-        V_m = events['V_m']
-        print(times)
-        print(V_m)
+        RE_cell = nest.Create('RE_cell', 1)
+        print("GID of RE_cell is: {}".format(RE_cell))
+        nest.Connect(dc_stim_depol, RE_cell, 'all_to_all')
+        nest.Connect(voltmeter6, RE_cell)
+
+        LTS_cell_2 = nest.Create('LTS_cell', 1)
+        print("GID of LTS_cell_2 is: {}".format(LTS_cell_2))
+        nest.Connect(dc_stim_hyperpol, LTS_cell_2, 'all_to_all')
+        nest.Connect(voltmeter7, LTS_cell_2)
+
+        TC_cell_2 = nest.Create('TC_cell', 1)
+        print("GID of TC_cell_2 is: {}".format(TC_cell_2))
+        nest.Connect(dc_stim_hyperpol, TC_cell_2, 'all_to_all')
+        nest.Connect(voltmeter8, TC_cell_2)
+
+        RE_cell_2 = nest.Create('RE_cell', 1)
+        print("GID of RE_cell_2 is: {}".format(RE_cell_2))
+        nest.Connect(dc_stim_hyperpol, RE_cell_2, 'all_to_all')
+        nest.Connect(voltmeter9, RE_cell_2)
+
+        nest.Simulate(1200)
+
+        # plot the graph
+        args = ['gnuplot', 'figure1.plt']
+        subprocess.call(args)
 
 
 if __name__ == "__main__":

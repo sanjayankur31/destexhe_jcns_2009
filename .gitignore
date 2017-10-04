@@ -6,3 +6,6 @@
 /demo_cx_up-down/x86_64
 
 tags
+*.dat
+*.swp
+*.swo
