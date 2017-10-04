@@ -118,39 +118,27 @@ class Destexhe2009:
         nest.CopyModel('aeif_cond_exp', 'RE_cell')
         nest.SetDefaults('RE_cell', self.dict_RE)
 
-    def figure1a(self):
+    def figure1(self):
         """Figure 1."""
-        RS_strong_cell = nest.Create('RS_strong_cell', 1)
         dc_stim = nest.Create('dc_generator')
         dc_properties = [
             {'amplitude': 0.25e3,  # pA
              'start': 200.,
              'stop': 400.
              }]
+        voltmeter_properties = {'withgid': True,
+                                'withtime': True,
+                                'interval': 0.1}
+
         nest.SetStatus(dc_stim, dc_properties)
 
+        RS_strong_cell = nest.Create('RS_strong_cell', 1)
         nest.Connect(dc_stim, RS_strong_cell, 'all_to_all')
         RS_strong_voltmeter = nest.Create('voltmeter')
-        nest.SetStatus(RS_strong_voltmeter, {'withgid': True,
-                                             'withtime': True,
-                                             'interval': 0.1})
+        nest.SetStatus(RS_strong_voltmeter, voltmeter_properties)
         nest.Connect(RS_strong_voltmeter, RS_strong_cell)
 
-        nest.Simulate(600)
-
-        self.plot_membrane_fig(RS_strong_voltmeter, "figure 1a")
-
-    def figure1b(self):
-        """Figure 1b."""
         RS_weak_cell = nest.Create('RS_weak_cell', 1)
-        dc_stim = nest.Create('dc_generator')
-        dc_properties = [
-            {'amplitude': 0.25e3,  # pA
-             'start': 800.,
-             'stop': 1000.
-             }]
-        nest.SetStatus(dc_stim, dc_properties)
-
         nest.Connect(dc_stim, RS_weak_cell, 'all_to_all')
         RS_weak_voltmeter = nest.Create('voltmeter')
         nest.SetStatus(RS_weak_voltmeter, {'withgid': True,
@@ -158,21 +146,7 @@ class Destexhe2009:
                                            'interval': 0.1})
         nest.Connect(RS_weak_voltmeter, RS_weak_cell)
 
-        nest.Simulate(600)
-
-        self.plot_membrane_fig(RS_weak_voltmeter, "figure 1b")
-
-    def figure1c(self):
-        """Figure 1c."""
         FS_cell = nest.Create('FS_cell', 1)
-        dc_stim = nest.Create('dc_generator')
-        dc_properties = [
-            {'amplitude': 0.25e3,  # pA
-             'start': 1400.,
-             'stop': 1600.
-             }]
-        nest.SetStatus(dc_stim, dc_properties)
-
         nest.Connect(dc_stim, FS_cell, 'all_to_all')
         FS_voltmeter = nest.Create('voltmeter')
         nest.SetStatus(FS_voltmeter, {'withgid': True,
@@ -180,20 +154,7 @@ class Destexhe2009:
                                       'interval': 0.1})
         nest.Connect(FS_voltmeter, FS_cell)
 
-        nest.Simulate(600)
-        self.plot_membrane_fig(FS_voltmeter, "figure 1c")
-
-    def figure1d(self):
-        """Figure 1d."""
         LTS_cell = nest.Create('LTS_cell', 1)
-        dc_stim = nest.Create('dc_generator')
-        dc_properties = [
-            {'amplitude': 0.25e3,  # pA
-             'start': 2000.,
-             'stop': 2200.
-             }]
-        nest.SetStatus(dc_stim, dc_properties)
-
         nest.Connect(dc_stim, LTS_cell, 'all_to_all')
         LTS_voltmeter = nest.Create('voltmeter')
         nest.SetStatus(LTS_voltmeter, {'withgid': True,
@@ -203,25 +164,13 @@ class Destexhe2009:
 
         nest.Simulate(600)
 
-        self.plot_membrane_fig(LTS_voltmeter, "figure 1d")
-
-    def plot_membrane_fig(self, voltmeter, title):
-        """Plot the membrane figs."""
         events = nest.GetStatus(voltmeter, 'events')[0]
         times = events['times']
         V_m = events['V_m']
         print(times)
         print(V_m)
-        plt.figure()
-        plt.title(title)
-        plt.plot(times, V_m)
-        plt.savefig("{}.png".format(title))
 
 
 if __name__ == "__main__":
     sim = Destexhe2009()
-    sim.figure1a()
-    sim.figure1b()
-    sim.figure1c()
-    # sim.figure1d_up()
-    # sim.figure1d_down()
+    sim.figure1()
