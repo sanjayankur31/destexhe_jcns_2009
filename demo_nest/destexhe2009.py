@@ -51,6 +51,10 @@ class Destexhe2009:
         self.t_ref = 2.5  # ms
         self.I_e = 0.  # pA
         self.V_peak = 0.  # mV
+        self.E_ex = 0.  # mV
+        self.E_in = -80.  # mV
+        self.tau_syn_ex = 5.  # ms
+        self.tau_syn_in = 10.  # ms
 
         self.neuron_dict_common = {
             'C_m': self.C_m * self.S,
@@ -62,7 +66,12 @@ class Destexhe2009:
             'Delta_T': self.Delta_T,
             'tau_w': self.tau_w,
             'V_th': self.V_th,
-            'V_peak': self.V_peak
+            'V_peak': self.V_peak,
+            'E_ex': self.E_ex,
+            'E_in': self.E_in,
+            'tau_syn_ex': self.tau_syn_ex,
+            'tau_syn_in': self.tau_syn_in
+
         }
 
         # cell set specific dicts
@@ -212,13 +221,67 @@ class Destexhe2009:
         nest.Connect(dc_stim_hyperpol, RE_cell_2, 'all_to_all')
         nest.Connect(voltmeter9, RE_cell_2)
 
-        nest.Simulate(1200)
+        nest.Simulate(1000)
 
         # plot the graph
         args = ['gnuplot', 'figure1.plt']
+        subprocess.call(args)
+
+    def figure2(self):
+        """Figure 2."""
+        TC_cells = nest.Create('TC_cell', 2)
+        RE_cells = nest.Create('RE_cell', 2)
+
+        nest.Connect(TC_cells, RE_cells,
+                     conn_spec={'rule': 'all_to_all'},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': 30.}
+                     )
+        nest.Connect(RE_cells, TC_cells,
+                     conn_spec={'rule': 'all_to_all'},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': -30.}
+                     )
+        nest.Connect(RE_cells, RE_cells,
+                     conn_spec={'rule': 'all_to_all'},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': -30.}
+                     )
+
+        voltmeter_properties = {'withgid': True,
+                                'withtime': True,
+                                'interval': 0.1,
+                                'to_file': True,
+                                }
+        voltmeter1 = nest.Create('voltmeter')
+        voltmeter2 = nest.Create('voltmeter')
+        voltmeter3 = nest.Create('voltmeter')
+        voltmeter4 = nest.Create('voltmeter')
+        nest.SetStatus(voltmeter1, voltmeter_properties)
+        nest.SetStatus(voltmeter2, voltmeter_properties)
+        nest.SetStatus(voltmeter3, voltmeter_properties)
+        nest.SetStatus(voltmeter4, voltmeter_properties)
+
+        nest.Connect(voltmeter1, [RE_cells[0]])
+        nest.Connect(voltmeter2, [RE_cells[1]])
+        nest.Connect(voltmeter3, [TC_cells[0]])
+        nest.Connect(voltmeter4, [TC_cells[1]])
+
+        stim = nest.Create('poisson_generator', 1,
+                           {'rate': 400., 'origin': 1000.,
+                            'start': 0., 'stop': 50.}
+                           )
+        nest.Connect(stim, RE_cells)
+        nest.Connect(stim, TC_cells)
+
+        nest.Simulate(2000)
+
+        # plot the graph
+        args = ['gnuplot', 'figure2.plt']
         subprocess.call(args)
 
 
 if __name__ == "__main__":
     sim = Destexhe2009()
     sim.figure1()
+    sim.figure2()
