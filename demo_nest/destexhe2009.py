@@ -44,7 +44,7 @@ class Destexhe2009:
         self.tau_w = 600.  # ms
         self.t_ref = 2.5  # ms
         self.I_e = 0.  # pA
-        self.V_peak = 0.  # mV
+        self.V_peak = 40.  # mV
         self.E_ex = 0.  # mV
         self.E_in = -80.  # mV
         self.tau_syn_ex = 5.  # ms
@@ -73,13 +73,13 @@ class Destexhe2009:
         self.dict_RS_strong = dict(self.neuron_dict_common)
         self.dict_RS_strong.update(
             {'a': 0.001e3,  # nS
-             'b': 0.04e3  # pA
+             'b': 0.06e3  # pA
              }
         )
         self.dict_RS_weak = dict(self.neuron_dict_common)
         self.dict_RS_weak.update(
             {'a': 0.001e3,  # nS
-             'b': 0.005e3  # pA
+             'b': 0.02e3  # pA
              }
         )
         self.dict_FS = dict(self.neuron_dict_common)
@@ -96,7 +96,7 @@ class Destexhe2009:
         )
         self.dict_TC = dict(self.neuron_dict_common)
         self.dict_TC.update(
-            {'a': 0.04e3,  # nS
+            {'a': 0.031e3,  # nS
              'b': 0.  # pA
              }
         )
@@ -141,7 +141,7 @@ class Destexhe2009:
         dc_depol_properties = [
             {'amplitude': 0.25e3,  # pA
              'start': 200.,
-             'stop': 600.
+             'stop': 500.
              }]
         nest.SetStatus(dc_stim_depol, dc_depol_properties)
 
@@ -150,7 +150,7 @@ class Destexhe2009:
         dc_hyperpol_properties = [
             {'amplitude': -0.25e3,  # pA
              'start': 200.,
-             'stop': 600.
+             'stop': 500.
              }]
         nest.SetStatus(dc_stim_hyperpol, dc_hyperpol_properties)
 
@@ -231,8 +231,13 @@ class Destexhe2009:
         args = ['gnuplot', 'figure1.plt']
         subprocess.call(args)
 
-    def figure2(self):
-        """Figure 2."""
+    def figure2(self, poisson_rate=400.):
+        """
+        Figure 2.
+
+
+        Incomplete - unable to find information on stimulus.
+        """
         self.__setup()
         TC_cells = nest.Create('TC_cell', 2)
         RE_cells = nest.Create('RE_cell', 2)
@@ -248,7 +253,7 @@ class Destexhe2009:
                                'weight': -30.}
                      )
         nest.Connect(RE_cells, RE_cells,
-                     conn_spec={'rule': 'all_to_all'},
+                     conn_spec={'rule': 'one_to_one'},
                      syn_spec={'model': 'static_synapse',
                                'weight': -30.}
                      )
@@ -273,20 +278,99 @@ class Destexhe2009:
         nest.Connect(voltmeter4, [TC_cells[1]])
 
         stim = nest.Create('poisson_generator', 1,
-                           {'rate': 400., 'origin': 1000.,
+                           {'rate': poisson_rate, 'origin': 0.,
                             'start': 0., 'stop': 50.}
                            )
-        nest.Connect(stim, RE_cells)
-        nest.Connect(stim, TC_cells)
+        parrot = nest.Create('parrot_neuron', 1)
+        nest.Connect(stim, parrot)
 
-        nest.Simulate(2000)
+        nest.Connect(parrot, RE_cells,
+                     {'rule': 'fixed_indegree', 'indegree': 1},
+                     {'model': 'static_synapse', 'weight': 30.},
+                     )
+        nest.Connect(parrot, TC_cells,
+                     {'rule': 'fixed_indegree', 'indegree': 1},
+                     {'model': 'static_synapse', 'weight': 30.}
+                     )
+
+        nest.Simulate(500.)
 
         # plot the graph
         args = ['gnuplot', 'figure2.plt']
+        subprocess.call(args)
+
+    def figure3(self):
+        """
+        Figure 3.
+
+        Not replicated yet.
+        """
+        self.__setup()
+        TC_cells = nest.Create('TC_cell', 10)
+        RE_cells = nest.Create('RE_cell', 10)
+
+        # fixed indegree - to ensure that scaling doesn't affect network much
+        nest.Connect(RE_cells, TC_cells,
+                     {'rule': 'fixed_indegree',
+                      'indegree': 8},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': -67.}
+                     )
+        nest.Connect(RE_cells, RE_cells,
+                     {'rule': 'fixed_indegree',
+                      'indegree': 8},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': -67.}
+                     )
+        nest.Connect(TC_cells, RE_cells,
+                     {'rule': 'fixed_indegree',
+                      'indegree': 2},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': 6.}
+                     )
+
+        stim = nest.Create('poisson_generator', 1, {'rate': 300., 'start': 0.,
+                                                    'stop': 5.*1000.})
+        stim_RE_cells = RE_cells
+        stim_TC_cells = TC_cells
+        nest.Connect(stim, stim_RE_cells,
+                     {'rule': 'fixed_indegree', 'indegree': 20},
+                     {'model': 'static_synapse', 'weight': 6.}
+                     )
+        nest.Connect(stim, stim_TC_cells,
+                     {'rule': 'fixed_indegree', 'indegree': 20},
+                     {'model': 'static_synapse', 'weight': 6.}
+                     )
+
+        detector = nest.Create('spike_detector', params={
+                                   'to_file': True,
+                                   'to_memory': False,
+                                }
+                               )
+        nest.Connect(RE_cells, detector)
+        nest.Connect(TC_cells, detector)
+
+        nest.Simulate(5*1000.)
+
+        # plot the graph
+        args = ['gnuplot', 'figure3.plt']
+        subprocess.call(args)
+
+    def figure4(self):
+        """
+        Figure4.
+
+
+        """
+        nest.Simulate(1500)
+
+        # plot the graph
+        args = ['gnuplot', 'figure4.plt']
         subprocess.call(args)
 
 
 if __name__ == "__main__":
     sim = Destexhe2009()
     sim.figure1()
-    sim.figure2()
+    #  sim.figure2()
+    #  sim.figure3()
