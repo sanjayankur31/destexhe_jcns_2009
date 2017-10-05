@@ -32,12 +32,6 @@ class Destexhe2009:
 
     def __init__(self):
         """Init params."""
-        nest.ResetKernel()
-        nest.SetKernelStatus(
-            {
-                'resolution': 0.1,
-                'overwrite_files': True,
-            })
         # not setting a, b here - they differ for different neuron sets so
         # we'll set them there. These are the common properties.
         self.S = 20000e-12  # m^2
@@ -82,56 +76,66 @@ class Destexhe2009:
              'b': 0.04e3  # pA
              }
         )
-        nest.CopyModel('aeif_cond_exp', 'RS_strong_cell')
-        nest.SetDefaults('RS_strong_cell', self.dict_RS_strong)
-
         self.dict_RS_weak = dict(self.neuron_dict_common)
         self.dict_RS_weak.update(
             {'a': 0.001e3,  # nS
              'b': 0.005e3  # pA
              }
         )
-        nest.CopyModel('aeif_cond_exp', 'RS_weak_cell')
-        nest.SetDefaults('RS_weak_cell', self.dict_RS_weak)
-
         self.dict_FS = dict(self.neuron_dict_common)
         self.dict_FS.update(
             {'a': 0.001e3,  # nS
              'b': 0.  # pA
              }
         )
-        nest.CopyModel('aeif_cond_exp', 'FS_cell')
-        nest.SetDefaults('FS_cell', self.dict_FS)
-
         self.dict_LTS = dict(self.neuron_dict_common)
         self.dict_LTS.update(
             {'a': 0.02e3,  # nS
              'b': 0.  # pA
              }
         )
-        nest.CopyModel('aeif_cond_exp', 'LTS_cell')
-        nest.SetDefaults('LTS_cell', self.dict_LTS)
-
         self.dict_TC = dict(self.neuron_dict_common)
         self.dict_TC.update(
             {'a': 0.04e3,  # nS
              'b': 0.  # pA
              }
         )
-        nest.CopyModel('aeif_cond_exp', 'TC_cell')
-        nest.SetDefaults('TC_cell', self.dict_TC)
-
         self.dict_RE = dict(self.neuron_dict_common)
         self.dict_RE.update(
             {'a': 0.08e3,  # nS
              'b': 0.03e3  # pA
              }
         )
+
+    def __setup(self):
+        """Setup neuron models."""
+        nest.ResetKernel()
+        nest.SetKernelStatus(
+            {
+                'resolution': 0.1,
+                'overwrite_files': True,
+            })
+        nest.CopyModel('aeif_cond_exp', 'RS_strong_cell')
+        nest.SetDefaults('RS_strong_cell', self.dict_RS_strong)
+
+        nest.CopyModel('aeif_cond_exp', 'RS_weak_cell')
+        nest.SetDefaults('RS_weak_cell', self.dict_RS_weak)
+
+        nest.CopyModel('aeif_cond_exp', 'FS_cell')
+        nest.SetDefaults('FS_cell', self.dict_FS)
+
+        nest.CopyModel('aeif_cond_exp', 'LTS_cell')
+        nest.SetDefaults('LTS_cell', self.dict_LTS)
+
+        nest.CopyModel('aeif_cond_exp', 'TC_cell')
+        nest.SetDefaults('TC_cell', self.dict_TC)
+
         nest.CopyModel('aeif_cond_exp', 'RE_cell')
         nest.SetDefaults('RE_cell', self.dict_RE)
 
     def figure1(self):
         """Figure 1."""
+        self.__setup()
         # set up depolarizing step current
         dc_stim_depol = nest.Create('dc_generator')
         dc_depol_properties = [
@@ -229,6 +233,7 @@ class Destexhe2009:
 
     def figure2(self):
         """Figure 2."""
+        self.__setup()
         TC_cells = nest.Create('TC_cell', 2)
         RE_cells = nest.Create('RE_cell', 2)
 
