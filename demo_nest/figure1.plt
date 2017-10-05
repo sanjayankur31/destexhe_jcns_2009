@@ -6,15 +6,16 @@ f(x) = x > -40 ? 40 : x
 
 unset border
 set size square
-set xrange [50:800]
+set xrange [50:1000]
 set yrange [-100:60]
+set xtics 500
 
 set title "(a) RS cell strong adaptation"
 set arrow from 50,-80 to 200,-80 nohead lw 2
-set arrow from 200,-70 to 500,-70 nohead lw 2
-set arrow from 500,-80 to 800,-80 nohead lw 2
+set arrow from 200,-70 to 600,-70 nohead lw 2
+set arrow from 600,-80 to 1000,-80 nohead lw 2
 set arrow from 200,-80 to 200,-70 nohead lw 2
-set arrow from 500,-80 to 500,-70 nohead lw 2
+set arrow from 600,-80 to 600,-70 nohead lw 2
 plot "voltmeter-03-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.001{/Symbol u}S, b = 0.06nA";
 
 set title "(b) RS cell weak adaptation"
@@ -35,10 +36,10 @@ unset arrow
 
 set title "(d - bottom) LTS cell"
 set arrow from 50,-80 to 200,-80 nohead lw 2
-set arrow from 200,-90 to 500,-90 nohead lw 2
-set arrow from 500,-80 to 800,-80 nohead lw 2
+set arrow from 200,-90 to 600,-90 nohead lw 2
+set arrow from 600,-80 to 1000,-80 nohead lw 2
 set arrow from 200,-90 to 200,-80 nohead lw 2
-set arrow from 500,-90 to 500,-80 nohead lw 2
+set arrow from 600,-90 to 600,-80 nohead lw 2
 plot "voltmeter-09-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.02{/Symbol u}S, b = 0nA";
 
 set title "(e - bottom) TC cell"

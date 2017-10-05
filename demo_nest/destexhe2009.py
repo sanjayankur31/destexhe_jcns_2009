@@ -73,13 +73,13 @@ class Destexhe2009:
         self.dict_RS_strong = dict(self.neuron_dict_common)
         self.dict_RS_strong.update(
             {'a': 0.001e3,  # nS
-             'b': 0.06e3  # pA
+             'b': 0.04e3  # pA
              }
         )
         self.dict_RS_weak = dict(self.neuron_dict_common)
         self.dict_RS_weak.update(
             {'a': 0.001e3,  # nS
-             'b': 0.02e3  # pA
+             'b': 0.005e3  # pA
              }
         )
         self.dict_FS = dict(self.neuron_dict_common)
@@ -141,7 +141,7 @@ class Destexhe2009:
         dc_depol_properties = [
             {'amplitude': 0.25e3,  # pA
              'start': 200.,
-             'stop': 500.
+             'stop': 600.
              }]
         nest.SetStatus(dc_stim_depol, dc_depol_properties)
 
@@ -150,7 +150,7 @@ class Destexhe2009:
         dc_hyperpol_properties = [
             {'amplitude': -0.25e3,  # pA
              'start': 200.,
-             'stop': 500.
+             'stop': 600.
              }]
         nest.SetStatus(dc_stim_hyperpol, dc_hyperpol_properties)
 
