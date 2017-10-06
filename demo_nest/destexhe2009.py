@@ -96,7 +96,7 @@ class Destexhe2009:
         )
         self.dict_TC = dict(self.neuron_dict_common)
         self.dict_TC.update(
-            {'a': 0.031e3,  # nS
+            {'a': 0.04e3,  # nS
              'b': 0.  # pA
              }
         )
