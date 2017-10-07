@@ -252,7 +252,7 @@ class Destexhe2009:
                      syn_spec={'model': 'static_synapse',
                                'weight': -30.}
                      )
-        nest.Connect(RE_cells, RE_cells,
+        nest.Connect(RE_cells, list(reversed(RE_cells)),
                      conn_spec={'rule': 'one_to_one'},
                      syn_spec={'model': 'static_synapse',
                                'weight': -30.}
