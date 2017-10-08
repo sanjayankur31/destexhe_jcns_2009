@@ -22,8 +22,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import nest
-import nest.voltage_trace
 import subprocess
+import random
+import logging
 
 
 class Destexhe2009:
@@ -33,6 +34,8 @@ class Destexhe2009:
     def __init__(self):
         """Init params."""
         # not setting a, b here - they differ for different neuron sets so
+        self.dt = 0.1
+
         # we'll set them there. These are the common properties.
         self.S = 20000e-12  # m^2
         self.C_m = 1e6/1e-4  # pF/m^2
@@ -49,13 +52,6 @@ class Destexhe2009:
         self.E_in = -80.  # mV
         self.tau_syn_ex = 5.  # ms
         self.tau_syn_in = 10.  # ms
-
-        # numbers that probabilites are based on
-        self.num_RS_strong = 1600
-        self.num_RS_weak = 1600
-        self.num_FS = 400
-        self.num_TC = 100
-        self.num_RE = 100
 
         self.neuron_dict_common = {
             'C_m': self.C_m * self.S,
@@ -80,7 +76,7 @@ class Destexhe2009:
         self.dict_RS_strong = dict(self.neuron_dict_common)
         self.dict_RS_strong.update(
             {'a': 0.001e3,  # nS
-             'b': 0.02e3  # pA
+             'b': 0.01e3  # pA
              }
         )
         self.dict_RS_weak = dict(self.neuron_dict_common)
@@ -116,10 +112,11 @@ class Destexhe2009:
 
     def __setup(self):
         """Setup neuron models."""
+        logging.info("Setting up NEST and neuron models")
         nest.ResetKernel()
         nest.SetKernelStatus(
             {
-                'resolution': 0.1,
+                'resolution': self.dt,
                 'overwrite_files': True,
             })
         nest.CopyModel('aeif_cond_exp', 'RS_strong_cell')
@@ -142,6 +139,7 @@ class Destexhe2009:
 
     def figure1(self):
         """Figure 1."""
+        logging.info("FIGURE 1: Different spiking behaviour traces.")
         self.__setup()
         # set up depolarizing step current
         dc_stim_depol = nest.Create('dc_generator')
@@ -188,47 +186,38 @@ class Destexhe2009:
 
         # individual neurons
         RS_strong_cell = nest.Create('RS_strong_cell', 1)
-        print("GID of RS_strong_cell is: {}".format(RS_strong_cell))
         nest.Connect(dc_stim_depol, RS_strong_cell, 'all_to_all')
         nest.Connect(voltmeter1, RS_strong_cell)
 
         RS_weak_cell = nest.Create('RS_weak_cell', 1)
-        print("GID of RS_weak_cell is: {}".format(RS_weak_cell))
         nest.Connect(dc_stim_depol, RS_weak_cell, 'all_to_all')
         nest.Connect(voltmeter2, RS_weak_cell)
 
         FS_cell = nest.Create('FS_cell', 1)
-        print("GID of FS_cell is: {}".format(FS_cell))
         nest.Connect(dc_stim_depol, FS_cell, 'all_to_all')
         nest.Connect(voltmeter3, FS_cell)
 
         LTS_cell = nest.Create('LTS_cell', 1)
-        print("GID of LTS_cell is: {}".format(LTS_cell))
         nest.Connect(dc_stim_depol, LTS_cell, 'all_to_all')
         nest.Connect(voltmeter4, LTS_cell)
 
         TC_cell = nest.Create('TC_cell', 1)
-        print("GID of TC_cell is: {}".format(TC_cell))
         nest.Connect(dc_stim_depol, TC_cell, 'all_to_all')
         nest.Connect(voltmeter5, TC_cell)
 
         RE_cell = nest.Create('RE_cell', 1)
-        print("GID of RE_cell is: {}".format(RE_cell))
         nest.Connect(dc_stim_depol, RE_cell, 'all_to_all')
         nest.Connect(voltmeter6, RE_cell)
 
         LTS_cell_2 = nest.Create('LTS_cell', 1)
-        print("GID of LTS_cell_2 is: {}".format(LTS_cell_2))
         nest.Connect(dc_stim_hyperpol, LTS_cell_2, 'all_to_all')
         nest.Connect(voltmeter7, LTS_cell_2)
 
         TC_cell_2 = nest.Create('TC_cell', 1)
-        print("GID of TC_cell_2 is: {}".format(TC_cell_2))
         nest.Connect(dc_stim_hyperpol, TC_cell_2, 'all_to_all')
         nest.Connect(voltmeter8, TC_cell_2)
 
         RE_cell_2 = nest.Create('RE_cell', 1)
-        print("GID of RE_cell_2 is: {}".format(RE_cell_2))
         nest.Connect(dc_stim_hyperpol, RE_cell_2, 'all_to_all')
         nest.Connect(voltmeter9, RE_cell_2)
 
@@ -242,8 +231,6 @@ class Destexhe2009:
         """
         Figure 2.
 
-
-        Unable to replicate - stimulus unclear.
         """
         self.__setup()
         TC_cells = nest.Create('TC_cell', num_TC)
@@ -299,8 +286,8 @@ class Destexhe2009:
         nest.Connect(voltmeter4, [TC_cells[1]])
 
         mystim = nest.Create('poisson_generator', 1,
-                             {'rate': 200.,
-                              'start': 150., 'stop': 200.})
+                             {'rate': 1000./70.,
+                              'start': 0., 'stop': 50.})
 #
         nest.Connect(mystim, [TC_cells[0]])
         nest.Connect(mystim, [TC_cells[1]])
@@ -311,48 +298,56 @@ class Destexhe2009:
                 'outputfile="Figure2.png"', 'figure2.plt']
         subprocess.call(args)
 
-    def thalamic(self, num_TC=100, num_RE=100, outputfile="Figure3"):
+    def thalamic(self, num_neurons=200, outputfile="Figure3"):
         """
         Figure 3 and 4 - oscillations in thalamic neuronas.
 
         Not replicated yet.
         """
         self.__setup()
+        num_TC = num_neurons/2
+        num_RE = num_neurons/2
+        scale = 200/num_neurons
         TC_cells = nest.Create('TC_cell', num_TC)
         RE_cells = nest.Create('RE_cell', num_RE)
 
-        scale_factor = round(self.num_TC + self.num_RE)/(num_TC + num_RE)
-        print("Scale factor is: {}".format(scale_factor))
-
-        # the indegree must remain the same as for a complete circuit
-        # this can either be done by increasing the probability of connections
-        # by multiplying it by the scale factor, or by using a constant 
-        # indegree
         nest.Connect(RE_cells, TC_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 8},
+                     {'rule': 'pairwise_bernoulli',
+                      'autapses': False,
+                      'multapses': False,
+                      'p': 0.08*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': -67.}
                      )
         nest.Connect(RE_cells, RE_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 8},
+                     {'rule': 'pairwise_bernoulli',
+                      'autapses': False,
+                      'multapses': False,
+                      'p': 0.08*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': -67.}
                      )
         nest.Connect(TC_cells, RE_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 2},
+                     {'rule': 'pairwise_bernoulli',
+                      'autapses': False,
+                      'multapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': 6.}
                      )
 
-        stim = nest.Create('poisson_generator', 1, {'rate': 400., 'start': 50.,
-                                                    'stop': 100.})
-        nest.Connect(stim, TC_cells,
-                     {'rule': 'fixed_indegree', 'indegree': 1},
-                     {'model': 'static_synapse', 'weight': 6.}
-                     )
+        stim_cells = random.sample(TC_cells, int(len(TC_cells)/5))
+        for stim_cell in stim_cells:
+            stim = nest.Create('poisson_generator', 20,
+                               {'rate': 1000./70.,
+                                'start': 0., 'stop': 50.})
+            nest.Connect(stim, [stim_cell],
+                         syn_spec={'model': 'static_synapse',
+                                   'delay': self.dt, 'weight': 6.*scale}
+                         )
 
         detector = nest.Create('spike_detector', params={
                                    'to_file': True,
@@ -362,12 +357,15 @@ class Destexhe2009:
         nest.Connect(RE_cells, detector)
         nest.Connect(TC_cells, detector)
 
-        print("TC -> RE: {}".format(nest.GetConnections(
-            source=TC_cells, target=RE_cells)))
-        print("From RE -> RE: {} ".format(nest.GetConnections(
-            source=RE_cells, target=RE_cells)))
-        print("From RE -> TC: {} ".format(nest.GetConnections(
-            source=RE_cells, target=TC_cells)))
+        print("TC -> RE: {} synapses per neuron".format(
+            len(nest.GetConnections(source=TC_cells,
+                                    target=RE_cells))/num_RE))
+        print("From RE -> RE: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=RE_cells, target=RE_cells))/num_RE))
+        print("From RE -> TC: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=RE_cells, target=TC_cells))/num_TC))
 
         voltmeter_properties = {'withgid': True,
                                 'withtime': True,
@@ -402,19 +400,21 @@ class Destexhe2009:
                 ]
         subprocess.call(args)
 
-    def corticals(self, num_PY=1600,
-                   num_IN=400, outputfile="Figure6b"):
+    def corticals6(self, num_neurons=2000, outputfile="Figure6"):
         """
         Both cortical diagrams.
         """
-        self.cortical('RS_strong_cell', num_PY, num_IN, "Figure6a")
-        self.cortical('RS_weak_cell', num_PY, num_IN, "Figure6b")
+        self.cortical6('RS_strong_cell', num_neurons, "Figure6a")
+        self.cortical6('RS_weak_cell', num_neurons, "Figure6b")
 
-    def cortical(self, PY_cell_model, num_PY, num_IN, outputfile):
+    def cortical6(self, PY_cell_model, num_neurons, outputfile):
         """
         Figure 6.
         """
         self.__setup()
+        scale = 2000/num_neurons
+        num_PY = int(0.8*num_neurons)
+        num_IN = int(0.2*num_neurons)
         PY_cells = nest.Create(PY_cell_model, num_PY)
         IN_cells = nest.Create('FS_cell', num_IN)
 
@@ -423,36 +423,51 @@ class Destexhe2009:
         # by multiplying it by the scale factor, or by using a constant
         # indegree
         nest.Connect(IN_cells, PY_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 8},
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': -67.}
                      )
         nest.Connect(IN_cells, IN_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 8},
+                     {'rule': 'pairwise_bernoulli',
+                      'autapses': False,
+                      'multapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': -67.}
                      )
         nest.Connect(PY_cells, IN_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 32},
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': 6.}
                      )
         nest.Connect(PY_cells, PY_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 32},
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': 6.}
                      )
 
-        stim = nest.Create('poisson_generator', 1, {'rate': 400., 'start': 50.,
-                                                    'stop': 100.})
-        nest.Connect(stim, PY_cells,
-                     {'rule': 'fixed_indegree', 'indegree': 20},
-                     {'model': 'static_synapse', 'weight': 6.}
-                     )
+        stim_cells = random.sample(PY_cells, int(len(PY_cells)/5))
+        for stim_cell in stim_cells:
+            stim = nest.Create('poisson_generator', 20,
+                               {'rate': 1000./70.,
+                                'start': 0., 'stop': 50.})
+            nest.Connect(stim, [stim_cell],
+                         syn_spec={'model': 'static_synapse',
+                                   'delay': self.dt, 'weight': 6.*scale}
+                         )
 
         detector = nest.Create('spike_detector', params={
                                    'to_file': True,
@@ -462,12 +477,18 @@ class Destexhe2009:
         nest.Connect(IN_cells, detector)
         nest.Connect(PY_cells, detector)
 
-        #  print("PY -> IN: {}".format(nest.GetConnections(
-            #  source=PY_cells, target=IN_cells)))
-        #  print("From IN -> IN: {} ".format(nest.GetConnections(
-            #  source=IN_cells, target=IN_cells)))
-        #  print("From IN -> PY: {} ".format(nest.GetConnections(
-            #  source=IN_cells, target=PY_cells)))
+        print("PY -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells,
+                                    target=IN_cells))/num_IN))
+        print("PY -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells,
+                                    target=PY_cells))/num_PY))
+        print("From IN -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells, target=IN_cells))/num_IN))
+        print("From IN -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells, target=PY_cells))/num_PY))
 
         voltmeter_properties = {'withgid': True,
                                 'withtime': True,
@@ -496,55 +517,74 @@ class Destexhe2009:
                 '-e', 'sd="{}"'.format(detector[0]),
                 '-e', 'v1="{}"'.format(voltmeter1[0]),
                 '-e', 'v2="{}"'.format(voltmeter2[0]),
-                '-e', 'v3="{}'.format(voltmeter3[0]),
+                '-e', 'v3="{}"'.format(voltmeter3[0]),
                 '-e', 'v4="{}"'.format(voltmeter4[0]),
-                'cortical.plt'
+                'cortical6.plt'
                 ]
         subprocess.call(args)
 
-    def cortical7(self):
+    def cortical7(self, num_neurons=2000):
         """
         Figure 7.
         """
         self.__setup()
-        PY_cells_layer1 = nest.Create('RS_weak_cell')
-        IN_cells_layer1 = nest.Create('FS_cell', num_IN)
+        num_PY = int(num_neurons * 0.8)
+        num_IN = int(num_neurons * 0.2)
+        num_PY_RS = int(0.95 * num_PY)
+        num_PY_LTS = int(0.05 * num_PY)
+        PY_cells_RS = nest.Create('RS_weak_cell', num_PY_RS)
+        PY_cells_LTS = nest.Create('LTS_cell', num_PY_LTS)
+        PY_cells = PY_cells_RS + PY_cells_LTS
+        IN_cells = nest.Create('FS_cell', num_IN)
 
-        # the indegree must remain the same as for a complete circuit
-        # this can either be done by increasing the probability of connections
-        # by multiplying it by the scale factor, or by using a constant
-        # indegree
+        scale = 2000/num_neurons
+
         nest.Connect(IN_cells, PY_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 8},
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': -67.}
                      )
         nest.Connect(IN_cells, IN_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 8},
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': -67.}
                      )
         nest.Connect(PY_cells, IN_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 32},
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': 6.}
                      )
         nest.Connect(PY_cells, PY_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 32},
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
                                'weight': 6.}
                      )
 
-        stim = nest.Create('poisson_generator', 1, {'rate': 400., 'start': 50.,
-                                                    'stop': 100.})
-        nest.Connect(stim, PY_cells,
-                     {'rule': 'fixed_indegree', 'indegree': 20},
-                     {'model': 'static_synapse', 'weight': 6.}
-                     )
+        stim_cells = random.sample(PY_cells, int(len(PY_cells)/5))
+        for stim_cell in stim_cells:
+            stim = nest.Create('poisson_generator', 20,
+                               {'rate': 1000./70.,
+                                'start': 0., 'stop': 50.})
+            nest.Connect(stim, [stim_cell],
+                         syn_spec={'model': 'static_synapse',
+                                   'delay': self.dt, 'weight': 6.*scale}
+                         )
 
         detector = nest.Create('spike_detector', params={
                                    'to_file': True,
@@ -554,12 +594,18 @@ class Destexhe2009:
         nest.Connect(IN_cells, detector)
         nest.Connect(PY_cells, detector)
 
-        #  print("PY -> IN: {}".format(nest.GetConnections(
-            #  source=PY_cells, target=IN_cells)))
-        #  print("From IN -> IN: {} ".format(nest.GetConnections(
-            #  source=IN_cells, target=IN_cells)))
-        #  print("From IN -> PY: {} ".format(nest.GetConnections(
-            #  source=IN_cells, target=PY_cells)))
+        print("PY -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells,
+                                    target=IN_cells))/num_IN))
+        print("PY -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells,
+                                    target=PY_cells))/num_PY))
+        print("From IN -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells, target=IN_cells))/num_IN))
+        print("From IN -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells, target=PY_cells))/num_PY))
 
         voltmeter_properties = {'withgid': True,
                                 'withtime': True,
@@ -575,22 +621,22 @@ class Destexhe2009:
         nest.SetStatus(voltmeter3, voltmeter_properties)
         nest.SetStatus(voltmeter4, voltmeter_properties)
 
-        nest.Connect(voltmeter1, [IN_cells[0]])
-        nest.Connect(voltmeter2, [IN_cells[1]])
-        nest.Connect(voltmeter3, [PY_cells[0]])
-        nest.Connect(voltmeter4, [PY_cells[1]])
+        nest.Connect(voltmeter1, [PY_cells_RS[0]])
+        nest.Connect(voltmeter2, [PY_cells_RS[20]])
+        nest.Connect(voltmeter3, [PY_cells_LTS[0]])
+        nest.Connect(voltmeter4, [PY_cells_LTS[10]])
 
-        nest.Simulate(500.)
+        nest.Simulate(5000.)
 
         # plot the graph
         args = ['gnuplot',
-                '-e', 'outputfile="{}"'.format(outputfile),
+                '-e', 'outputfile="{}"'.format("Figure7b"),
                 '-e', 'sd="{}"'.format(detector[0]),
                 '-e', 'v1="{}"'.format(voltmeter1[0]),
                 '-e', 'v2="{}"'.format(voltmeter2[0]),
                 '-e', 'v3="{}'.format(voltmeter3[0]),
                 '-e', 'v4="{}"'.format(voltmeter4[0]),
-                'cortical.plt'
+                'cortical7.plt'
                 ]
         subprocess.call(args)
 
@@ -603,4 +649,5 @@ if __name__ == "__main__":
     #  sim.thalamic(num_TC=20, num_RE=20, outputfile="Figure3")
     #  sim.thalamic(num_TC=30, num_RE=30, outputfile="Figure4b")
     #  sim.thalamic(num_TC=50, num_RE=50, outputfile="Figure4c")
-    #  sim.corticals()
+    sim.corticals6(num_neurons=2000)
+    #  sim.cortical7(num_neurons=500)

@@ -25,10 +25,10 @@ set title "(b) RS cell weak adaptation"
 plot "voltmeter-04-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.001{/Symbol u}S, b = 0.005nA";
 
 set title "(c) FS cell"
-plot "voltmeter-05-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.001{/Symbol u}S, b = 0nA";
+plot "voltmeter-05-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.001{/Symbol u}S, b = 0.nA";
 
 set title "(d - top) LTS cell"
-plot "voltmeter-06-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.02{/Symbol u}S, b = 0nA";
+plot "voltmeter-06-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.02{/Symbol u}S, b = 0.nA";
 
 set title "(e - top) TC cell"
 plot "voltmeter-07-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.04{/Symbol u}S, b = 0nA";
@@ -46,10 +46,10 @@ set arrow from 200,-90 to 200,-80 nohead lw 2
 set arrow from 600,-90 to 600,-80 nohead lw 2
 set arrow from 750,-90 to 950,-90 nohead lw 2
 set label "200ms" at 800,-95
-plot "voltmeter-09-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.02{/Symbol u}S, b = 0nA";
+plot "voltmeter-09-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.05{/Symbol u}S, b = 0.nA";
 
 set title "(e - bottom) TC cell"
-plot "voltmeter-10-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.04{/Symbol u}S, b = 0nA";
+plot "voltmeter-10-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.024{/Symbol u}S, b = 0nA";
 
 set title "(f - bottom) RE cell"
-plot "voltmeter-11-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.08{/Symbol u}S, b = 0.03nA";
+plot "voltmeter-11-0.dat" using ($2):(f($3)) with lines lw 2 title "a = 0.04{/Symbol u}S, b = 0.03nA";
