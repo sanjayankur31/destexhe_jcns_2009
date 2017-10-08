@@ -24,6 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import nest
 import nest.voltage_trace
 import subprocess
+import numpy
 
 
 class Destexhe2009:
@@ -231,32 +232,46 @@ class Destexhe2009:
         args = ['gnuplot', 'figure1.plt']
         subprocess.call(args)
 
-    def figure2(self, poisson_rate=400.):
+    def figure2(self):
         """
         Figure 2.
 
 
-        Incomplete - unable to find information on stimulus.
+        Unable to replicate - stimulus unclear.
         """
         self.__setup()
         TC_cells = nest.Create('TC_cell', 2)
         RE_cells = nest.Create('RE_cell', 2)
 
         nest.Connect(TC_cells, RE_cells,
-                     conn_spec={'rule': 'all_to_all'},
+                     conn_spec={'rule': 'one_to_one'},
                      syn_spec={'model': 'static_synapse',
                                'weight': 30.}
                      )
-        nest.Connect(RE_cells, TC_cells,
-                     conn_spec={'rule': 'all_to_all'},
-                     syn_spec={'model': 'static_synapse',
-                               'weight': -30.}
-                     )
-        nest.Connect(RE_cells, list(reversed(RE_cells)),
+        nest.Connect(TC_cells, list(reversed(RE_cells)),
                      conn_spec={'rule': 'one_to_one'},
                      syn_spec={'model': 'static_synapse',
-                               'weight': -30.}
+                               'weight': 30.}
                      )
+        for i in range(0, 4):
+            nest.Connect(RE_cells, TC_cells,
+                         conn_spec={'rule': 'one_to_one'},
+                         syn_spec={'model': 'static_synapse',
+                                   'weight': -30.}
+                         )
+            nest.Connect(RE_cells, list(reversed(TC_cells)),
+                         conn_spec={'rule': 'one_to_one'},
+                         syn_spec={'model': 'static_synapse',
+                                   'weight': -30.}
+                         )
+        for i in range(0, 8):
+            nest.Connect(RE_cells, list(reversed(RE_cells)),
+                         conn_spec={'rule': 'one_to_one'},
+                         syn_spec={'model': 'static_synapse',
+                                   'weight': -30.}
+                         )
+        print("From RE: {} ".format(nest.GetConnections(source=RE_cells)))
+        print("From TC: {}".format(nest.GetConnections(source=TC_cells)))
 
         voltmeter_properties = {'withgid': True,
                                 'withtime': True,
@@ -277,26 +292,17 @@ class Destexhe2009:
         nest.Connect(voltmeter3, [TC_cells[0]])
         nest.Connect(voltmeter4, [TC_cells[1]])
 
-        stim = nest.Create('poisson_generator', 1,
-                           {'rate': poisson_rate, 'origin': 0.,
-                            'start': 0., 'stop': 50.}
-                           )
-        parrot = nest.Create('parrot_neuron', 1)
-        nest.Connect(stim, parrot)
-
-        nest.Connect(parrot, RE_cells,
-                     {'rule': 'fixed_indegree', 'indegree': 1},
-                     {'model': 'static_synapse', 'weight': 30.},
-                     )
-        nest.Connect(parrot, TC_cells,
-                     {'rule': 'fixed_indegree', 'indegree': 1},
-                     {'model': 'static_synapse', 'weight': 30.}
-                     )
-
-        nest.Simulate(500.)
+        mystim = nest.Create('poisson_generator', 1,
+                             {'rate': 200.,
+                              'start': 150., 'stop': 200.})
+#
+        nest.Connect(mystim, [TC_cells[0]])
+        nest.Connect(mystim, [TC_cells[1]])
+        nest.Simulate(1500.)
 
         # plot the graph
-        args = ['gnuplot', 'figure2.plt']
+        args = ['gnuplot', '-e',
+                'outputfile="Figure2.png"', 'figure2.plt']
         subprocess.call(args)
 
     def figure3(self):
@@ -311,32 +317,27 @@ class Destexhe2009:
 
         # fixed indegree - to ensure that scaling doesn't affect network much
         nest.Connect(RE_cells, TC_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 8},
+                     {'rule': 'pairwise_bernoulli',
+                      'p': 0.08},
                      syn_spec={'model': 'static_synapse',
                                'weight': -67.}
                      )
         nest.Connect(RE_cells, RE_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 8},
+                     {'rule': 'pairwise_bernoulli',
+                      'p': 0.08},
                      syn_spec={'model': 'static_synapse',
                                'weight': -67.}
                      )
         nest.Connect(TC_cells, RE_cells,
-                     {'rule': 'fixed_indegree',
-                      'indegree': 2},
+                     {'rule': 'pairwise_bernoulli',
+                      'p': 0.02},
                      syn_spec={'model': 'static_synapse',
                                'weight': 6.}
                      )
 
         stim = nest.Create('poisson_generator', 1, {'rate': 300., 'start': 0.,
-                                                    'stop': 5.*1000.})
-        stim_RE_cells = RE_cells
+                                                    'stop': 50.})
         stim_TC_cells = TC_cells
-        nest.Connect(stim, stim_RE_cells,
-                     {'rule': 'fixed_indegree', 'indegree': 20},
-                     {'model': 'static_synapse', 'weight': 6.}
-                     )
         nest.Connect(stim, stim_TC_cells,
                      {'rule': 'fixed_indegree', 'indegree': 20},
                      {'model': 'static_synapse', 'weight': 6.}
@@ -350,7 +351,7 @@ class Destexhe2009:
         nest.Connect(RE_cells, detector)
         nest.Connect(TC_cells, detector)
 
-        nest.Simulate(5*1000.)
+        nest.Simulate(51000.)
 
         # plot the graph
         args = ['gnuplot', 'figure3.plt']
@@ -358,11 +359,52 @@ class Destexhe2009:
 
     def figure4(self):
         """
-        Figure4.
+        Figure 4.
 
-
+        Not replicated yet.
         """
-        nest.Simulate(1500)
+        self.__setup()
+        TC_cells = nest.Create('TC_cell', 50)
+        RE_cells = nest.Create('RE_cell', 50)
+
+        # fixed indegree - to ensure that scaling doesn't affect network much
+        nest.Connect(RE_cells, TC_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'p': 0.08},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': -67.}
+                     )
+        nest.Connect(RE_cells, RE_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'p': 0.08},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': -67.}
+                     )
+        nest.Connect(TC_cells, RE_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'p': 0.02},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': 6.}
+                     )
+
+        stim = nest.Create('poisson_generator', 1, {'rate': 400., 'origin': 0.,
+                                                    'start': 0.,
+                                                    'stop': 50.})
+        stim_TC_cells = TC_cells
+        nest.Connect(stim, stim_TC_cells,
+                     {'rule': 'fixed_indegree', 'indegree': 20},
+                     {'model': 'static_synapse', 'weight': 6.}
+                     )
+
+        detector = nest.Create('spike_detector', params={
+                                   'to_file': True,
+                                   'to_memory': False,
+                                }
+                               )
+        nest.Connect(RE_cells, detector)
+        nest.Connect(TC_cells, detector)
+
+        nest.Simulate(51000.)
 
         # plot the graph
         args = ['gnuplot', 'figure4.plt']
@@ -371,6 +413,7 @@ class Destexhe2009:
 
 if __name__ == "__main__":
     sim = Destexhe2009()
-    sim.figure1()
-    #  sim.figure2()
+    #  sim.figure1()
+    #  sim.figure2(isi=i)
     #  sim.figure3()
+    #  sim.figure4()
