@@ -80,37 +80,37 @@ class Destexhe2009:
         self.dict_RS_strong = dict(self.neuron_dict_common)
         self.dict_RS_strong.update(
             {'a': 0.001e3,  # nS
-             'b': 0.075e3  # pA
+             'b': 0.02e3  # pA
              }
         )
         self.dict_RS_weak = dict(self.neuron_dict_common)
         self.dict_RS_weak.update(
             {'a': 0.001e3,  # nS
-             'b': 0.0275e3  # pA
+             'b': 0.005e3  # pA
              }
         )
         self.dict_FS = dict(self.neuron_dict_common)
         self.dict_FS.update(
             {'a': 0.001e3,  # nS
-             'b': 0.007e3  # pA
+             'b': 0.  # pA
              }
         )
         self.dict_LTS = dict(self.neuron_dict_common)
         self.dict_LTS.update(
-            {'a': 0.05e3,  # nS
-             'b': 0.00  # pA
+            {'a': 0.02e3,  # nS
+             'b': 0.  # pA
              }
         )
         self.dict_TC = dict(self.neuron_dict_common)
         self.dict_TC.update(
-            {'a': 0.024e3,  # nS
-             'b': 0.00  # pA
+            {'a': 0.04e3,  # nS
+             'b': 0.  # pA
              }
         )
         self.dict_RE = dict(self.neuron_dict_common)
         self.dict_RE.update(
-            {'a': 0.040e3,  # nS
-             'b': 0.030e3  # pA
+            {'a': 0.08e3,  # nS
+             'b': 0.03e3  # pA
              }
         )
 
@@ -402,7 +402,7 @@ class Destexhe2009:
                 ]
         subprocess.call(args)
 
-    def cortical_b(self, num_PY=1600,
+    def corticals(self, num_PY=1600,
                    num_IN=400, outputfile="Figure6b"):
         """
         Both cortical diagrams.
@@ -502,6 +502,98 @@ class Destexhe2009:
                 ]
         subprocess.call(args)
 
+    def cortical7(self):
+        """
+        Figure 7.
+        """
+        self.__setup()
+        PY_cells_layer1 = nest.Create('RS_weak_cell')
+        IN_cells_layer1 = nest.Create('FS_cell', num_IN)
+
+        # the indegree must remain the same as for a complete circuit
+        # this can either be done by increasing the probability of connections
+        # by multiplying it by the scale factor, or by using a constant
+        # indegree
+        nest.Connect(IN_cells, PY_cells,
+                     {'rule': 'fixed_indegree',
+                      'indegree': 8},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': -67.}
+                     )
+        nest.Connect(IN_cells, IN_cells,
+                     {'rule': 'fixed_indegree',
+                      'indegree': 8},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': -67.}
+                     )
+        nest.Connect(PY_cells, IN_cells,
+                     {'rule': 'fixed_indegree',
+                      'indegree': 32},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': 6.}
+                     )
+        nest.Connect(PY_cells, PY_cells,
+                     {'rule': 'fixed_indegree',
+                      'indegree': 32},
+                     syn_spec={'model': 'static_synapse',
+                               'weight': 6.}
+                     )
+
+        stim = nest.Create('poisson_generator', 1, {'rate': 400., 'start': 50.,
+                                                    'stop': 100.})
+        nest.Connect(stim, PY_cells,
+                     {'rule': 'fixed_indegree', 'indegree': 20},
+                     {'model': 'static_synapse', 'weight': 6.}
+                     )
+
+        detector = nest.Create('spike_detector', params={
+                                   'to_file': True,
+                                   'to_memory': False,
+                                }
+                               )
+        nest.Connect(IN_cells, detector)
+        nest.Connect(PY_cells, detector)
+
+        #  print("PY -> IN: {}".format(nest.GetConnections(
+            #  source=PY_cells, target=IN_cells)))
+        #  print("From IN -> IN: {} ".format(nest.GetConnections(
+            #  source=IN_cells, target=IN_cells)))
+        #  print("From IN -> PY: {} ".format(nest.GetConnections(
+            #  source=IN_cells, target=PY_cells)))
+
+        voltmeter_properties = {'withgid': True,
+                                'withtime': True,
+                                'interval': 0.1,
+                                'to_file': True,
+                                }
+        voltmeter1 = nest.Create('voltmeter')
+        voltmeter2 = nest.Create('voltmeter')
+        voltmeter3 = nest.Create('voltmeter')
+        voltmeter4 = nest.Create('voltmeter')
+        nest.SetStatus(voltmeter1, voltmeter_properties)
+        nest.SetStatus(voltmeter2, voltmeter_properties)
+        nest.SetStatus(voltmeter3, voltmeter_properties)
+        nest.SetStatus(voltmeter4, voltmeter_properties)
+
+        nest.Connect(voltmeter1, [IN_cells[0]])
+        nest.Connect(voltmeter2, [IN_cells[1]])
+        nest.Connect(voltmeter3, [PY_cells[0]])
+        nest.Connect(voltmeter4, [PY_cells[1]])
+
+        nest.Simulate(500.)
+
+        # plot the graph
+        args = ['gnuplot',
+                '-e', 'outputfile="{}"'.format(outputfile),
+                '-e', 'sd="{}"'.format(detector[0]),
+                '-e', 'v1="{}"'.format(voltmeter1[0]),
+                '-e', 'v2="{}"'.format(voltmeter2[0]),
+                '-e', 'v3="{}'.format(voltmeter3[0]),
+                '-e', 'v4="{}"'.format(voltmeter4[0]),
+                'cortical.plt'
+                ]
+        subprocess.call(args)
+
 
 if __name__ == "__main__":
     sim = Destexhe2009()
@@ -511,5 +603,4 @@ if __name__ == "__main__":
     #  sim.thalamic(num_TC=20, num_RE=20, outputfile="Figure3")
     #  sim.thalamic(num_TC=30, num_RE=30, outputfile="Figure4b")
     #  sim.thalamic(num_TC=50, num_RE=50, outputfile="Figure4c")
-    #  sim.cortical_a()
-    #  sim.cortical_b()
+    #  sim.corticals()
