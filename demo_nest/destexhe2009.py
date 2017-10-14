@@ -25,6 +25,7 @@ import nest
 import subprocess
 import random
 import logging
+import sys
 
 
 class Destexhe2009:
@@ -73,8 +74,20 @@ class Destexhe2009:
 
         # cell set specific dicts
         # remember that assignment does not copy, only refers
+        self.dict_RS_strongest = dict(self.neuron_dict_common)
+        self.dict_RS_strongest.update(
+            {'a': 0.001e3,  # nS
+             'b': 0.1e3  # pA
+             }
+        )
         self.dict_RS_strong = dict(self.neuron_dict_common)
         self.dict_RS_strong.update(
+            {'a': 0.001e3,  # nS
+             'b': 0.04e3  # pA
+             }
+        )
+        self.dict_RS_medium = dict(self.neuron_dict_common)
+        self.dict_RS_medium.update(
             {'a': 0.001e3,  # nS
              'b': 0.01e3  # pA
              }
@@ -110,17 +123,29 @@ class Destexhe2009:
              }
         )
 
+        self.slog = logging.getLogger(__name__)
+        handler = logging.StreamHandler(sys.stdout)
+        self.slog.addHandler(handler)
+        self.slog.setLevel(logging.DEBUG)
+
     def __setup(self):
         """Setup neuron models."""
-        logging.info("Setting up NEST and neuron models")
+        self.slog.info("Setting up NEST and neuron models")
         nest.ResetKernel()
+        nest.set_verbosity("M_FATAL")
         nest.SetKernelStatus(
             {
                 'resolution': self.dt,
                 'overwrite_files': True,
             })
+        nest.CopyModel('aeif_cond_exp', 'RS_strongest_cell')
+        nest.SetDefaults('RS_strongest_cell', self.dict_RS_strongest)
+
         nest.CopyModel('aeif_cond_exp', 'RS_strong_cell')
         nest.SetDefaults('RS_strong_cell', self.dict_RS_strong)
+
+        nest.CopyModel('aeif_cond_exp', 'RS_medium_cell')
+        nest.SetDefaults('RS_medium_cell', self.dict_RS_medium)
 
         nest.CopyModel('aeif_cond_exp', 'RS_weak_cell')
         nest.SetDefaults('RS_weak_cell', self.dict_RS_weak)
@@ -136,10 +161,11 @@ class Destexhe2009:
 
         nest.CopyModel('aeif_cond_exp', 'RE_cell')
         nest.SetDefaults('RE_cell', self.dict_RE)
+        self.slog.info("Models set up")
 
     def figure1(self):
         """Figure 1."""
-        logging.info("FIGURE 1: Different spiking behaviour traces.")
+        self.slog.info("FIGURE 1: Different spiking behaviour traces.")
         self.__setup()
         # set up depolarizing step current
         dc_stim_depol = nest.Create('dc_generator')
@@ -174,6 +200,8 @@ class Destexhe2009:
         voltmeter7 = nest.Create('voltmeter')
         voltmeter8 = nest.Create('voltmeter')
         voltmeter9 = nest.Create('voltmeter')
+        voltmeter10 = nest.Create('voltmeter')
+        voltmeter11 = nest.Create('voltmeter')
         nest.SetStatus(voltmeter1, voltmeter_properties)
         nest.SetStatus(voltmeter2, voltmeter_properties)
         nest.SetStatus(voltmeter3, voltmeter_properties)
@@ -183,49 +211,60 @@ class Destexhe2009:
         nest.SetStatus(voltmeter7, voltmeter_properties)
         nest.SetStatus(voltmeter8, voltmeter_properties)
         nest.SetStatus(voltmeter9, voltmeter_properties)
+        nest.SetStatus(voltmeter10, voltmeter_properties)
+        nest.SetStatus(voltmeter11, voltmeter_properties)
 
         # individual neurons
+        RS_strongest_cell = nest.Create('RS_strongest_cell', 1)
+        nest.Connect(dc_stim_depol, RS_strongest_cell, 'all_to_all')
+        nest.Connect(voltmeter1, RS_strongest_cell)
+
         RS_strong_cell = nest.Create('RS_strong_cell', 1)
         nest.Connect(dc_stim_depol, RS_strong_cell, 'all_to_all')
-        nest.Connect(voltmeter1, RS_strong_cell)
+        nest.Connect(voltmeter2, RS_strong_cell)
+
+        RS_medium_cell = nest.Create('RS_medium_cell', 1)
+        nest.Connect(dc_stim_depol, RS_medium_cell, 'all_to_all')
+        nest.Connect(voltmeter3, RS_medium_cell)
 
         RS_weak_cell = nest.Create('RS_weak_cell', 1)
         nest.Connect(dc_stim_depol, RS_weak_cell, 'all_to_all')
-        nest.Connect(voltmeter2, RS_weak_cell)
+        nest.Connect(voltmeter4, RS_weak_cell)
 
         FS_cell = nest.Create('FS_cell', 1)
         nest.Connect(dc_stim_depol, FS_cell, 'all_to_all')
-        nest.Connect(voltmeter3, FS_cell)
+        nest.Connect(voltmeter5, FS_cell)
 
         LTS_cell = nest.Create('LTS_cell', 1)
         nest.Connect(dc_stim_depol, LTS_cell, 'all_to_all')
-        nest.Connect(voltmeter4, LTS_cell)
+        nest.Connect(voltmeter6, LTS_cell)
 
         TC_cell = nest.Create('TC_cell', 1)
         nest.Connect(dc_stim_depol, TC_cell, 'all_to_all')
-        nest.Connect(voltmeter5, TC_cell)
+        nest.Connect(voltmeter7, TC_cell)
 
         RE_cell = nest.Create('RE_cell', 1)
         nest.Connect(dc_stim_depol, RE_cell, 'all_to_all')
-        nest.Connect(voltmeter6, RE_cell)
+        nest.Connect(voltmeter8, RE_cell)
 
         LTS_cell_2 = nest.Create('LTS_cell', 1)
         nest.Connect(dc_stim_hyperpol, LTS_cell_2, 'all_to_all')
-        nest.Connect(voltmeter7, LTS_cell_2)
+        nest.Connect(voltmeter9, LTS_cell_2)
 
         TC_cell_2 = nest.Create('TC_cell', 1)
         nest.Connect(dc_stim_hyperpol, TC_cell_2, 'all_to_all')
-        nest.Connect(voltmeter8, TC_cell_2)
+        nest.Connect(voltmeter10, TC_cell_2)
 
         RE_cell_2 = nest.Create('RE_cell', 1)
         nest.Connect(dc_stim_hyperpol, RE_cell_2, 'all_to_all')
-        nest.Connect(voltmeter9, RE_cell_2)
+        nest.Connect(voltmeter11, RE_cell_2)
 
         nest.Simulate(1000)
 
         # plot the graph
         args = ['gnuplot', 'figure1.plt']
         subprocess.call(args)
+        self.slog.info("FIGURE 1 plotted")
 
     def figure2(self, num_TC=100, num_RE=100):
         """
