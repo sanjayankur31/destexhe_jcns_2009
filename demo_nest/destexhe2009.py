@@ -26,6 +26,7 @@ import subprocess
 import random
 import logging
 import sys
+from pyNN.random import NumpyRNG, RandomDistribution
 
 
 class Destexhe2009:
@@ -36,6 +37,13 @@ class Destexhe2009:
         """Init params."""
         # not setting a, b here - they differ for different neuron sets so
         self.dt = 0.1
+        self.SEED_CONN = 193566
+        self.SEED_GEN = 983651
+        self.SEED_LTS = 428577
+        self.rStim = NumpyRNG(seed=self.SEED_GEN)
+        self.NSTIMS = 20  # number of stimes each neuron receives
+        self.stim_duration = 50.  # ms
+        self.stim_interval = 70.  # ms
 
         # we'll set them there. These are the common properties.
         self.S = 20000e-12  # m^2
@@ -134,15 +142,29 @@ class Destexhe2009:
         self.slog.addHandler(handler)
         self.slog.setLevel(logging.DEBUG)
 
+    def __generate_stimulus(self, start=0., stop=50., interval=70.):
+        """Use the stimulus generator from the published source."""
+        rd = RandomDistribution('exponential', [interval], rng=self.rStim)
+        t = start
+        times = []
+        while t < stop:
+            t += rd.next()
+            if t < stop:
+                times.append(t)
+        return times
+
     def __setup(self):
         """Setup neuron models."""
         self.slog.info("Setting up NEST and neuron models")
+        random.seed(self.SEED_LTS)
         nest.ResetKernel()
         nest.set_verbosity("M_FATAL")
         nest.SetKernelStatus(
             {
                 'resolution': self.dt,
                 'overwrite_files': True,
+                'grng_seed': self.SEED_CONN,
+                'rng_seeds': [self.SEED_CONN]
             })
         nest.CopyModel('aeif_cond_exp', 'RS_strongest_cell')
         nest.SetDefaults('RS_strongest_cell', self.dict_RS_strongest)
@@ -317,8 +339,10 @@ class Destexhe2009:
                          syn_spec={'model': 'static_synapse',
                                    'weight': -30.}
                          )
-        print("From RE: {} ".format(nest.GetConnections(source=RE_cells)))
-        print("From TC: {}".format(nest.GetConnections(source=TC_cells)))
+        self.slog.info("From RE: {} ".format(
+            nest.GetConnections(source=RE_cells)))
+        self.slog.info("From TC: {}".format(
+            nest.GetConnections(source=TC_cells)))
 
         voltmeter_properties = {'withgid': True,
                                 'withtime': True,
@@ -339,7 +363,7 @@ class Destexhe2009:
         nest.Connect(voltmeter3, [TC_cells[0]])
         nest.Connect(voltmeter4, [TC_cells[1]])
 
-        mystim = nest.Create('poisson_generator', 1,
+        mystim = nest.Create('poisson_generator', 20,
                              {'rate': 1000./70.,
                               'start': 0., 'stop': 50.})
 #
@@ -359,16 +383,17 @@ class Destexhe2009:
         Not replicated yet.
         """
         self.__setup()
-        num_TC = num_neurons/2
-        num_RE = num_neurons/2
+        num_TC = int(num_neurons/2)
+        num_RE = int(num_neurons - num_TC)
         scale = 200/num_neurons
         TC_cells = nest.Create('TC_cell', num_TC)
+        self.slog.info("{} TC cells created".format(num_TC))
         RE_cells = nest.Create('RE_cell', num_RE)
+        self.slog.info("{} RE cells created".format(num_RE))
 
         nest.Connect(RE_cells, TC_cells,
                      {'rule': 'pairwise_bernoulli',
                       'autapses': False,
-                      'multapses': False,
                       'p': 0.08*scale},
                      syn_spec={'model': 'static_synapse',
                                'delay': self.dt,
@@ -377,7 +402,6 @@ class Destexhe2009:
         nest.Connect(RE_cells, RE_cells,
                      {'rule': 'pairwise_bernoulli',
                       'autapses': False,
-                      'multapses': False,
                       'p': 0.08*scale},
                      syn_spec={'model': 'static_synapse',
                                'delay': self.dt,
@@ -386,22 +410,30 @@ class Destexhe2009:
         nest.Connect(TC_cells, RE_cells,
                      {'rule': 'pairwise_bernoulli',
                       'autapses': False,
-                      'multapses': False,
                       'p': 0.02*scale},
                      syn_spec={'model': 'static_synapse',
                                'delay': self.dt,
                                'weight': 6.}
                      )
 
-        stim_cells = random.sample(TC_cells, int(len(TC_cells)/5))
+        stim_cells = TC_cells + RE_cells
+        self.slog.info("{} stim cells".format(len(stim_cells)))
         for stim_cell in stim_cells:
-            stim = nest.Create('poisson_generator', 20,
-                               {'rate': 1000./70.,
-                                'start': 0., 'stop': 50.})
-            nest.Connect(stim, [stim_cell],
-                         syn_spec={'model': 'static_synapse',
-                                   'delay': self.dt, 'weight': 6.*scale}
-                         )
+            stims = nest.Create('spike_generator', self.NSTIMS)
+            for stim in stims:
+                spike_times = self.__generate_stimulus(0,
+                                                       self.stim_duration,
+                                                       self.stim_interval)
+                nest.SetStatus([stim],
+                               {'origin': 0.,
+                                'precise_times': True,
+                                'spike_times': spike_times
+                                })
+
+                nest.Connect([stim], [stim_cell],
+                             syn_spec={'model': 'static_synapse',
+                                       'delay': self.dt, 'weight': 6.}
+                             )
 
         detector = nest.Create('spike_detector', params={
                                    'to_file': True,
@@ -411,13 +443,13 @@ class Destexhe2009:
         nest.Connect(RE_cells, detector)
         nest.Connect(TC_cells, detector)
 
-        print("TC -> RE: {} synapses per neuron".format(
+        self.slog.info("TC -> RE: {} synapses per neuron".format(
             len(nest.GetConnections(source=TC_cells,
                                     target=RE_cells))/num_RE))
-        print("From RE -> RE: {} synapses per neuron".format(
+        self.slog.info("From RE -> RE: {} synapses per neuron".format(
             len(nest.GetConnections(
                 source=RE_cells, target=RE_cells))/num_RE))
-        print("From RE -> TC: {} synapses per neuron".format(
+        self.slog.info("From RE -> TC: {} synapses per neuron".format(
             len(nest.GetConnections(
                 source=RE_cells, target=TC_cells))/num_TC))
 
@@ -458,7 +490,10 @@ class Destexhe2009:
         """
         Both cortical diagrams.
         """
-        self.cortical6('RS_strong_cell', num_neurons, "Figure6a")
+        # 0.01
+        self.cortical6('RS_medium_2_cell', num_neurons, "Figure6a")
+        # 0.005
+        # This becomes layer 2 in the cx-cx model
         self.cortical6('RS_weak_cell', num_neurons, "Figure6b")
 
     def cortical6(self, PY_cell_model, num_neurons, outputfile):
@@ -467,10 +502,15 @@ class Destexhe2009:
         """
         self.__setup()
         scale = 2000/num_neurons
+        self.slog.info("Scale of network {}".format(scale))
+
         num_PY = int(0.8*num_neurons)
-        num_IN = int(0.2*num_neurons)
+        num_IN = int(num_neurons - num_PY)
+
         PY_cells = nest.Create(PY_cell_model, num_PY)
+        self.slog.info("{} PY_RS cells created".format(len(PY_cells)))
         IN_cells = nest.Create('FS_cell', num_IN)
+        self.slog.info("{} IN_FS cells created".format(len(IN_cells)))
 
         # the indegree must remain the same as for a complete circuit
         # this can either be done by increasing the probability of connections
@@ -513,15 +553,24 @@ class Destexhe2009:
                                'weight': 6.}
                      )
 
-        stim_cells = random.sample(PY_cells, int(len(PY_cells)/5))
+        stim_cells = PY_cells[:int(len(PY_cells))]
+        self.slog.info("{} stim cells".format(len(stim_cells)))
         for stim_cell in stim_cells:
-            stim = nest.Create('poisson_generator', 20,
-                               {'rate': 1000./70.,
-                                'start': 0., 'stop': 50.})
-            nest.Connect(stim, [stim_cell],
-                         syn_spec={'model': 'static_synapse',
-                                   'delay': self.dt, 'weight': 6.*scale}
-                         )
+            stims = nest.Create('spike_generator', self.NSTIMS)
+            for stim in stims:
+                spike_times = self.__generate_stimulus(0,
+                                                       self.stim_duration,
+                                                       self.stim_interval)
+                nest.SetStatus([stim],
+                               {'origin': 0.,
+                                'precise_times': True,
+                                'spike_times': spike_times
+                                })
+
+                nest.Connect([stim], [stim_cell],
+                             syn_spec={'model': 'static_synapse',
+                                       'delay': self.dt, 'weight': 6.}
+                             )
 
         detector = nest.Create('spike_detector', params={
                                    'to_file': True,
@@ -531,16 +580,16 @@ class Destexhe2009:
         nest.Connect(IN_cells, detector)
         nest.Connect(PY_cells, detector)
 
-        print("PY -> IN: {} synapses per neuron".format(
+        self.slog.info("PY -> IN: {} synapses per neuron".format(
             len(nest.GetConnections(source=PY_cells,
                                     target=IN_cells))/num_IN))
-        print("PY -> PY: {} synapses per neuron".format(
+        self.slog.info("PY -> PY: {} synapses per neuron".format(
             len(nest.GetConnections(source=PY_cells,
                                     target=PY_cells))/num_PY))
-        print("From IN -> IN: {} synapses per neuron".format(
+        self.slog.info("From IN -> IN: {} synapses per neuron".format(
             len(nest.GetConnections(
                 source=IN_cells, target=IN_cells))/num_IN))
-        print("From IN -> PY: {} synapses per neuron".format(
+        self.slog.info("From IN -> PY: {} synapses per neuron".format(
             len(nest.GetConnections(
                 source=IN_cells, target=PY_cells))/num_PY))
 
@@ -577,21 +626,38 @@ class Destexhe2009:
                 ]
         subprocess.call(args)
 
-    def cortical7(self, num_neurons=2000):
+    def cortical7(self, num_neurons=2000, LTS_percent=0.10,
+                  plotname="Figure7b"):
         """
         Figure 7.
+
+        This becomes layer1 in the cx-cx model.
         """
         self.__setup()
+        self.slog.info("Creating network with {} neurons".format(num_neurons))
         num_PY = int(num_neurons * 0.8)
-        num_IN = int(num_neurons * 0.2)
-        num_PY_RS = int(0.95 * num_PY)
-        num_PY_LTS = int(0.05 * num_PY)
-        PY_cells_RS = nest.Create('RS_weak_cell', num_PY_RS)
+        num_IN = num_neurons - num_PY
+
+        num_PY_LTS = 0
+        for i in range(0, num_PY):
+            if random.uniform(0, 1) < LTS_percent:
+                num_PY_LTS += 1
+        num_PY_RS = num_PY - num_PY_LTS
+
+        # b = 0.02
+        PY_cells_RS = nest.Create('RS_medium_cell', num_PY_RS)
+        self.slog.info("{} PY_RS cells created".format(len(PY_cells_RS)))
         PY_cells_LTS = nest.Create('LTS_cell', num_PY_LTS)
+        self.slog.info("{} PY_LTS cells created".format(len(PY_cells_LTS)))
         PY_cells = PY_cells_RS + PY_cells_LTS
+        # shuffle the neurons
+        PY_cells = random.sample(PY_cells, k=len(PY_cells))
+
         IN_cells = nest.Create('FS_cell', num_IN)
+        self.slog.info("{} IN (FS) cells created".format(len(IN_cells)))
 
         scale = 2000/num_neurons
+        self.slog.info("Scale of network {}".format(scale))
 
         nest.Connect(IN_cells, PY_cells,
                      {'rule': 'pairwise_bernoulli',
@@ -630,15 +696,25 @@ class Destexhe2009:
                                'weight': 6.}
                      )
 
-        stim_cells = random.sample(PY_cells, int(len(PY_cells)/5))
+        # they don't take a random sample, they just take the first ones
+        stim_cells = PY_cells[:int(num_neurons/5)]
+        self.slog.info("Stim cells: {}".format(len(stim_cells)))
         for stim_cell in stim_cells:
-            stim = nest.Create('poisson_generator', 20,
-                               {'rate': 1000./70.,
-                                'start': 0., 'stop': 50.})
-            nest.Connect(stim, [stim_cell],
-                         syn_spec={'model': 'static_synapse',
-                                   'delay': self.dt, 'weight': 6.*scale}
-                         )
+            stims = nest.Create('spike_generator', self.NSTIMS)
+            for stim in stims:
+                spike_times = self.__generate_stimulus(0,
+                                                       self.stim_duration,
+                                                       self.stim_interval)
+                nest.SetStatus([stim],
+                               {'origin': 0.,
+                                'precise_times': True,
+                                'spike_times': spike_times
+                                })
+
+                nest.Connect([stim], [stim_cell],
+                             syn_spec={'model': 'static_synapse',
+                                       'delay': self.dt, 'weight': 6.}
+                             )
 
         detector = nest.Create('spike_detector', params={
                                    'to_file': True,
@@ -648,16 +724,16 @@ class Destexhe2009:
         nest.Connect(IN_cells, detector)
         nest.Connect(PY_cells, detector)
 
-        print("PY -> IN: {} synapses per neuron".format(
+        self.slog.info("PY -> IN: {} synapses per neuron".format(
             len(nest.GetConnections(source=PY_cells,
                                     target=IN_cells))/num_IN))
-        print("PY -> PY: {} synapses per neuron".format(
+        self.slog.info("PY -> PY: {} synapses per neuron".format(
             len(nest.GetConnections(source=PY_cells,
                                     target=PY_cells))/num_PY))
-        print("From IN -> IN: {} synapses per neuron".format(
+        self.slog.info("From IN -> IN: {} synapses per neuron".format(
             len(nest.GetConnections(
                 source=IN_cells, target=IN_cells))/num_IN))
-        print("From IN -> PY: {} synapses per neuron".format(
+        self.slog.info("From IN -> PY: {} synapses per neuron".format(
             len(nest.GetConnections(
                 source=IN_cells, target=PY_cells))/num_PY))
 
@@ -678,13 +754,13 @@ class Destexhe2009:
         nest.Connect(voltmeter1, [PY_cells_RS[0]])
         nest.Connect(voltmeter2, [PY_cells_RS[20]])
         nest.Connect(voltmeter3, [PY_cells_LTS[0]])
-        nest.Connect(voltmeter4, [PY_cells_LTS[10]])
+        nest.Connect(voltmeter4, [PY_cells_LTS[1]])
 
         nest.Simulate(5000.)
 
         # plot the graph
         args = ['gnuplot',
-                '-e', 'outputfile="{}"'.format("Figure7b"),
+                '-e', 'outputfile="{}"'.format(plotname),
                 '-e', 'sd="{}"'.format(detector[0]),
                 '-e', 'v1="{}"'.format(voltmeter1[0]),
                 '-e', 'v2="{}"'.format(voltmeter2[0]),
@@ -693,15 +769,500 @@ class Destexhe2009:
                 'cortical7.plt'
                 ]
         subprocess.call(args)
+        self.slog.info("Figure 7 plotted")
+
+    def thalamo_cortical10(self, num_PY=1600, num_IN=400,
+                           num_TC=100, num_RE=100,
+                           PY_cell_model='RS_weak_cell',
+                           plotname="Figure10"):
+        """
+        Figure 10 - WIP.
+        """
+        self.__setup()
+        # layer 1
+        scale = 2000/(num_PY + num_IN)
+        self.slog.info("Scale of network {}".format(scale))
+
+        PY_cells = nest.Create(PY_cell_model, num_PY)
+        self.slog.info("Layer 1: {} PY_RS cells created".format(
+            len(PY_cells)))
+        IN_cells = nest.Create('FS_cell', num_IN)
+        self.slog.info("Layer 1: {} IN (FS) cells created".format(
+            len(IN_cells)))
+        nest.Connect(IN_cells, PY_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': -67.}
+                     )
+        nest.Connect(IN_cells, IN_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': -67.}
+                     )
+        nest.Connect(PY_cells, IN_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        nest.Connect(PY_cells, PY_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+
+        # layer 2
+        scale2 = 200/(num_TC + num_RE)
+        self.slog.info("Scale of network {}".format(scale2))
+
+        TC_cells = nest.Create('TC_cell', num_TC)
+        self.slog.info("Layer 2: {} TC_cells created".format(
+            len(TC_cells)))
+
+        RE_cells = nest.Create('RE_cell', num_RE)
+        self.slog.info("Layer 2: {} IN (FS) cells created".format(
+            len(RE_cells)))
+
+        nest.Connect(RE_cells, TC_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.08*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': -67.}
+                     )
+        nest.Connect(RE_cells, RE_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.08*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': -67.}
+                     )
+        nest.Connect(TC_cells, RE_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        # interlayer connectivity
+        nest.Connect(PY_cells, RE_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        nest.Connect(PY_cells, TC_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        nest.Connect(TC_cells, PY_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        nest.Connect(TC_cells, IN_cells,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+
+        stim_cells = (
+            list(PY_cells)[:int(len(PY_cells)/5)] +
+            list(TC_cells)[:int(len(TC_cells)/5)])
+        self.slog.info("Stim cells: {}".format(len(stim_cells)))
+        for stim_cell in stim_cells:
+            stims = nest.Create('spike_generator', self.NSTIMS)
+            for stim in stims:
+                spike_times = self.__generate_stimulus(0,
+                                                       self.stim_duration,
+                                                       self.stim_interval)
+                nest.SetStatus([stim],
+                               {'origin': 0.,
+                                'precise_times': True,
+                                'spike_times': spike_times
+                                })
+
+                nest.Connect([stim], [stim_cell],
+                             syn_spec={'model': 'static_synapse',
+                                       'delay': self.dt, 'weight': 6.}
+                             )
+
+        detector = nest.Create('spike_detector', params={
+                                   'to_file': True,
+                                   'to_memory': False,
+                                }
+                               )
+        nest.Connect(PY_cells, detector)
+        nest.Connect(IN_cells, detector)
+        nest.Connect(RE_cells, detector)
+        nest.Connect(TC_cells, detector)
+
+        self.slog.info("PY -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells,
+                                    target=IN_cells))/num_IN))
+        self.slog.info("PY -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells,
+                                    target=PY_cells))/num_PY))
+        self.slog.info("From IN -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells, target=IN_cells))/num_IN))
+        self.slog.info("From IN -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells, target=PY_cells))/num_PY))
+
+        self.slog.info("TC -> RE: {} synapses per neuron".format(
+            len(nest.GetConnections(source=TC_cells,
+                                    target=RE_cells))/num_RE))
+        self.slog.info("From RE -> RE: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=RE_cells, target=RE_cells))/num_RE))
+        self.slog.info("From RE -> TC: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=RE_cells, target=TC_cells))/num_TC))
+
+        self.slog.info(
+            "PY -> TC: {} synapses per neuron".format(
+                len(nest.GetConnections(source=PY_cells,
+                                        target=TC_cells))/num_TC))
+        self.slog.info(
+            "PY -> RE: {} synapses per neuron".format(
+                len(nest.GetConnections(source=PY_cells,
+                                        target=RE_cells))/num_RE))
+        self.slog.info(
+            "TC -> PY: {} synapses per neuron".format(
+                len(nest.GetConnections(source=TC_cells,
+                                        target=PY_cells))/PY_cells))
+        self.slog.info(
+            "TC -> IN: {} synapses per neuron".format(
+                len(nest.GetConnections(source=TC_cells,
+                                        target=IN_cells))/IN_cells))
+
+        voltmeter_properties = {'withgid': True,
+                                'withtime': True,
+                                'interval': 0.1,
+                                'to_file': True,
+                                }
+        voltmeter1 = nest.Create('voltmeter')
+        voltmeter2 = nest.Create('voltmeter')
+        voltmeter3 = nest.Create('voltmeter')
+        voltmeter4 = nest.Create('voltmeter')
+        voltmeter5 = nest.Create('voltmeter')
+        voltmeter6 = nest.Create('voltmeter')
+        voltmeter7 = nest.Create('voltmeter')
+        voltmeter8 = nest.Create('voltmeter')
+        nest.SetStatus(voltmeter1, voltmeter_properties)
+        nest.SetStatus(voltmeter2, voltmeter_properties)
+        nest.SetStatus(voltmeter3, voltmeter_properties)
+        nest.SetStatus(voltmeter4, voltmeter_properties)
+        nest.SetStatus(voltmeter5, voltmeter_properties)
+        nest.SetStatus(voltmeter6, voltmeter_properties)
+        nest.SetStatus(voltmeter7, voltmeter_properties)
+        nest.SetStatus(voltmeter8, voltmeter_properties)
+
+        nest.Connect(voltmeter1, [PY_cells[0]])
+        nest.Connect(voltmeter2, [PY_cells[20]])
+        nest.Connect(voltmeter3, [IN_cells[0]])
+        nest.Connect(voltmeter3, [IN_cells[20]])
+        nest.Connect(voltmeter1, [TC_cells[0]])
+        nest.Connect(voltmeter2, [TC_cells[20]])
+        nest.Connect(voltmeter1, [RE_cells[0]])
+        nest.Connect(voltmeter2, [RE_cells[20]])
+
+        nest.Simulate(5000.)
+
+        # plot the graph
+        args = ['gnuplot',
+                '-e', 'outputfile="{}"'.format(plotname),
+                '-e', 'sd="{}"'.format(detector[0]),
+                'figure13.plt'
+                ]
+        subprocess.call(args)
+        self.slog.info("Figure 10 plotted")
+
+    def cortical_cortical13(self, num_neurons=2500, LTS_percent=0.10,
+                            plotname="Figure13"):
+        """
+        Figure 13 - WIP.
+        """
+        self.__setup()
+        self.slog.info("Creating network with {} neurons".format(num_neurons))
+        # layer 1
+        num_layer1 = int(0.8 * num_neurons)
+        scale1 = 2000/num_layer1
+        self.slog.info("Scale of network {}".format(scale1))
+        num_PY_1 = int(num_layer1 * 0.8)
+        num_IN_1 = num_layer1 - num_PY_1
+
+        PY_cells_1 = nest.Create('RS_medium_cell', num_PY_1)
+        self.slog.info("Layer 1: {} PY_RS cells created".format(
+            len(PY_cells_1)))
+        IN_cells_1 = nest.Create('FS_cell', num_IN_1)
+        self.slog.info("Layer 1: {} IN (FS) cells created".format(
+            len(IN_cells_1)))
+        nest.Connect(IN_cells_1, PY_cells_1,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale1},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': -67.}
+                     )
+        nest.Connect(IN_cells_1, IN_cells_1,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale1},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': -67.}
+                     )
+        nest.Connect(PY_cells_1, IN_cells_1,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale1},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        nest.Connect(PY_cells_1, PY_cells_1,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale1},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+
+        # layer 2
+        num_layer2 = num_neurons - num_layer1
+        scale2 = 2000/num_layer2
+        self.slog.info("Scale of network {}".format(scale2))
+        num_PY_2 = int(num_layer2 * 0.8)
+        num_IN_2 = num_layer2 - num_PY_2
+        num_PY_LTS_2 = 0
+        for i in range(0, num_PY_2):
+            if random.uniform(0, 2) < LTS_percent:
+                num_PY_LTS_2 += 2
+        num_PY_RS_2 = num_PY_2 - num_PY_LTS_2
+
+        PY_cells_RS_2 = nest.Create('RS_weak_cell', num_PY_RS_2)
+        self.slog.info("Layer 2: {} PY_RS cells created".format(
+            len(PY_cells_RS_2)))
+        PY_cells_LTS_2 = nest.Create('LTS_cell', num_PY_LTS_2)
+        self.slog.info("Layer 2: {} PY_LTS cells created".format(
+            len(PY_cells_LTS_2)))
+        PY_cells_2 = PY_cells_RS_2 + PY_cells_LTS_2
+        # shuffle the neurons
+        PY_cells_2 = random.sample(PY_cells_2, k=len(PY_cells_2))
+
+        IN_cells_2 = nest.Create('FS_cell', num_IN_2)
+        self.slog.info("Layer 2: {} IN (FS) cells created".format(
+            len(IN_cells_2)))
+
+        nest.Connect(IN_cells_2, PY_cells_2,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': -67.}
+                     )
+        nest.Connect(IN_cells_2, IN_cells_2,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': -67.}
+                     )
+        nest.Connect(PY_cells_2, IN_cells_2,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        nest.Connect(PY_cells_2, PY_cells_2,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.02*scale2},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        # interlayer connectivity
+        nest.Connect(PY_cells_1, PY_cells_2,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.01},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+        nest.Connect(PY_cells_2, PY_cells_1,
+                     {'rule': 'pairwise_bernoulli',
+                      'multapses': False,
+                      'autapses': False,
+                      'p': 0.01},
+                     syn_spec={'model': 'static_synapse',
+                               'delay': self.dt,
+                               'weight': 6.}
+                     )
+
+        #  stim_cells = (
+        #  list(PY_cells_1)[:int(len(PY_cells_1)/5)] +
+        #  list(PY_cells_2)[:int(len(PY_cells_2)/5)])
+        stim_cells = (list(PY_cells_1) + list(PY_cells_2) + list(IN_cells_1) +
+                      list(IN_cells_2))
+        self.slog.info("Stim cells: {}".format(len(stim_cells)))
+        for stim_cell in stim_cells:
+            stims = nest.Create('spike_generator', self.NSTIMS)
+            for stim in stims:
+                spike_times = self.__generate_stimulus(0,
+                                                       self.stim_duration,
+                                                       self.stim_interval)
+                nest.SetStatus([stim],
+                               {'origin': 250.,
+                                'precise_times': True,
+                                'spike_times': spike_times
+                                })
+
+                nest.Connect([stim], [stim_cell],
+                             syn_spec={'model': 'static_synapse',
+                                       'delay': self.dt, 'weight': 6.}
+                             )
+
+        detector = nest.Create('spike_detector', params={
+                                   'to_file': True,
+                                   'to_memory': False,
+                                }
+                               )
+        nest.Connect(IN_cells_1, detector)
+        nest.Connect(PY_cells_1, detector)
+        nest.Connect(IN_cells_2, detector)
+        nest.Connect(PY_cells_2, detector)
+
+        self.slog.info("Layer 1: PY -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells_1,
+                                    target=IN_cells_1))/num_IN_1))
+        self.slog.info("Layer 1: PY -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells_1,
+                                    target=PY_cells_1))/num_PY_1))
+        self.slog.info("Layer 1: From IN -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells_1, target=IN_cells_1))/num_IN_1))
+        self.slog.info("Layer 1: From IN -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells_1, target=PY_cells_1))/num_PY_1))
+
+        self.slog.info("Layer 2: PY -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells_2,
+                                    target=IN_cells_2))/num_IN_2))
+        self.slog.info("Layer 2: PY -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(source=PY_cells_2,
+                                    target=PY_cells_2))/num_PY_2))
+        self.slog.info("Layer 2: From IN -> IN: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells_2, target=IN_cells_2))/num_IN_2))
+        self.slog.info("Layer 2: From IN -> PY: {} synapses per neuron".format(
+            len(nest.GetConnections(
+                source=IN_cells_2, target=PY_cells_2))/num_PY_2))
+
+        self.slog.info(
+            "Layer 1 PY -> Layer 2 PY: {} synapses per neuron".format(
+                len(nest.GetConnections(source=PY_cells_1,
+                                        target=PY_cells_2))/num_PY_2))
+        self.slog.info(
+            "Layer 2 PY -> Layer 1 PY: {} synapses per neuron".format(
+                len(nest.GetConnections(source=PY_cells_2,
+                                        target=PY_cells_1))/num_PY_1))
+
+        """
+        voltmeter_properties = {'withgid': True,
+                                'withtime': True,
+                                'interval': 0.1,
+                                'to_file': True,
+                                }
+        voltmeter1 = nest.Create('voltmeter')
+        voltmeter2 = nest.Create('voltmeter')
+        voltmeter3 = nest.Create('voltmeter')
+        voltmeter4 = nest.Create('voltmeter')
+        nest.SetStatus(voltmeter1, voltmeter_properties)
+        nest.SetStatus(voltmeter2, voltmeter_properties)
+        nest.SetStatus(voltmeter3, voltmeter_properties)
+        nest.SetStatus(voltmeter4, voltmeter_properties)
+
+        nest.Connect(voltmeter1, [PY_cells_RS[0]])
+        nest.Connect(voltmeter2, [PY_cells_RS[20]])
+        nest.Connect(voltmeter3, [PY_cells_LTS[0]])
+        nest.Connect(voltmeter4, [PY_cells_LTS[1]])
+        """
+
+        nest.Simulate(5000.)
+
+        # plot the graph
+        args = ['gnuplot',
+                '-e', 'outputfile="{}"'.format(plotname),
+                '-e', 'sd="{}"'.format(detector[0]),
+                'figure13.plt'
+                ]
+        subprocess.call(args)
+        self.slog.info("Figure 13 plotted")
 
 
 if __name__ == "__main__":
     sim = Destexhe2009()
-    sim.figure1()
+    #  sim.figure1()
     #  sim.figure2(isi=i)
-    #  sim.thalamic(num_TC=2, num_RE=2, outputfile="Figure3")
-    #  sim.thalamic(num_TC=20, num_RE=20, outputfile="Figure3")
-    #  sim.thalamic(num_TC=30, num_RE=30, outputfile="Figure4b")
-    #  sim.thalamic(num_TC=50, num_RE=50, outputfile="Figure4c")
-    sim.corticals6(num_neurons=2000)
-    #  sim.cortical7(num_neurons=500)
+    #  sim.thalamic(num_neurons=20, outputfile="Figure3")
+    #  sim.thalamic(num_neurons=200, outputfile="Figure4c")
+    #  sim.corticals6(num_neurons=2000)
+    #  sim.cortical7(num_neurons=400, LTS_percent=0.20, plotname="Figure7a")
+    #  sim.cortical7(num_neurons=500, LTS_percent=0.20, plotname="Figure7b")
+    sim.cortical_cortical13()

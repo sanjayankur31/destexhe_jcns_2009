@@ -4,7 +4,7 @@ f(x) = x > -40 ? 40 : x
 set output outputfile."-rasters.png"
 unset border
 set xrange[0:5000]
-set yrange[-1:]
+set yrange[-1:500]
 set ytics 5 nomirror
 set xtics nomirror
 set ytics 100
